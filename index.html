@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Recommendation Chatbot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Landing Page -->
+    <div class="landing-page">
+        <h1 class="landing-title">Movie Recommendation Chatbot</h1>
+        <p class="landing-subtitle">Your personal AI assistant for discovering great movies across popular OTT platforms. Get personalized recommendations based on your preferences, language choices, and favorite genres. Whether you're looking for Bollywood hits, Telugu blockbusters, or the latest in streaming content, we've got you covered!</p>
+        <button class="open-chat-btn">Start Chatting</button>
+    </div>
+
+    <!-- Chatbot Interface -->
+    <div class="overlay"></div>
+    <div class="container">
+        <button class="close-chat-btn">×</button>
+        <h1>Movie Recommendation Chatbot</h1>
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    Hi! I'm your movie recommendation assistant. Tell me a movie you like, and I'll suggest similar movies!
+                </div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="userInput" placeholder="Enter a movie title...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
