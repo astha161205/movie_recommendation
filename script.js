@@ -124,111 +124,105 @@ async function sendMessage() {
         );
         const searchData = await searchResponse.json();
 
-        if (searchData.results && searchData.results.length > 0) {
-            let movie;
-            
-            if (searchYear) {
-                // If year was specified, find the movie with matching year
-                movie = searchData.results.find(m => {
-                    const movieYear = m.release_date ? new Date(m.release_date).getFullYear().toString() : null;
-                    return movieYear === searchYear;
-                });
-                
-                // If no exact year match found, use the first result
-                if (!movie) {
-                    movie = searchData.results[0];
-                    const movieYear = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
-                    addMessage(`Note: Couldn't find "${searchTitle}" from ${searchYear}. Showing results for "${movie.title}" (${movieYear}) instead.`, 'bot');
-                }
-            } else {
-                // If multiple movies found with same title, show a message with years
-                if (searchData.results.length > 1) {
-                    const movieOptions = searchData.results
-                        .slice(0, 3) // Show top 3 matches
-                        .map(m => {
-                            const year = m.release_date ? new Date(m.release_date).getFullYear() : 'N/A';
-                            return `"${m.title}" (${year})`;
-                        })
-                        .join(', ');
-                    addMessage(`Found multiple movies with similar titles: ${movieOptions}. For a specific movie, include the year like: "${searchTitle} (YEAR)"`, 'bot');
-                }
-                movie = searchData.results[0];
-            }
-
-            // Get recommendations for this specific movie
-            const recommendResponse = await fetch(
-                `https://api.themoviedb.org/3/movie/${movie.id}/recommendations?api_key=${TMDB_API_KEY}&language=en-US&page=1`
+        if (!searchData.results || searchData.results.length === 0) {
+            // If no results found, try a fuzzy search with less strict parameters
+            const fuzzySearchResponse = await fetch(
+                `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchTitle)}&language=en-US&page=1&include_adult=false`
             );
-            const recommendData = await recommendResponse.json();
+            const fuzzySearchData = await fuzzySearchResponse.json();
 
-            // Get similar movies
-            const similarResponse = await fetch(
-                `https://api.themoviedb.org/3/movie/${movie.id}/similar?api_key=${TMDB_API_KEY}&language=en-US&page=1`
-            );
-            const similarData = await similarResponse.json();
-
-            // Combine and filter recommendations and similar movies
-            const allRecommendations = [...(recommendData.results || []), ...(similarData.results || [])]
-                .filter((movie, index, self) => 
-                    index === self.findIndex((m) => m.id === movie.id) && // Remove duplicates
-                    movie.vote_average >= 6 && 
-                    movie.vote_count >= 50
-                )
-                .sort((a, b) => b.vote_average - a.vote_average)
-                .slice(0, 10);
-
-            // Remove loading indicator
             loadingDiv.remove();
 
-            // Display the original movie first
-            addMessage(`Here's the movie you searched for:`, 'bot');
-            chatMessages.appendChild(createMovieRecommendation(movie));
-
-            if (allRecommendations.length > 0) {
-                addMessage(`If you liked "${movie.title}", you might also enjoy these similar movies:`, 'bot');
+            if (fuzzySearchData.results && fuzzySearchData.results.length > 0) {
+                // Found similar titles
+                const suggestions = fuzzySearchData.results
+                    .slice(0, 3)
+                    .map(m => {
+                        const year = m.release_date ? ` (${new Date(m.release_date).getFullYear()})` : '';
+                        return `"${m.title}${year}"`;
+                    })
+                    .join(', ');
                 
-                // Create a section for similar movies
-                const similarMoviesSection = document.createElement('div');
-                similarMoviesSection.className = 'similar-movies-section';
-                
-                // Add all recommendations to the section
-                allRecommendations.forEach(movie => {
-                    similarMoviesSection.appendChild(createMovieRecommendation(movie));
-                });
-                
-                chatMessages.appendChild(similarMoviesSection);
+                addMessage(`I couldn't find "${searchTitle}". Did you mean one of these: ${suggestions}?`, 'bot');
             } else {
-                // If no recommendations found, try genre-based search
-                const genreIds = movie.genre_ids || [];
-                const discoverUrl = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}`
-                    + '&language=en-US'
-                    + '&sort_by=vote_average.desc'
-                    + '&vote_count.gte=100'
-                    + '&vote_average.gte=6.5'
-                    + `&with_genres=${genreIds.join(',')}`
-                    + '&page=1';
-
-                const discoverResponse = await fetch(discoverUrl);
-                const discoverData = await discoverResponse.json();
-
-                if (discoverData.results && discoverData.results.length > 0) {
-                    addMessage(`Here are some similar highly-rated movies you might enjoy:`, 'bot');
-                    
-                    // Create a section for discovered movies
-                    const discoveredMoviesSection = document.createElement('div');
-                    discoveredMoviesSection.className = 'similar-movies-section';
-                    
-                    const recommendations = discoverData.results
-                        .filter(m => m.id !== movie.id) // Exclude the original movie
-                        .slice(0, 10); // Increased from 5 to 10
-                    
-                    recommendations.forEach(movie => {
-                        discoveredMoviesSection.appendChild(createMovieRecommendation(movie));
-                    });
-                    
-                    chatMessages.appendChild(discoveredMoviesSection);
-                }
+                // No similar titles found
+                addMessage(`Sorry, I couldn't find any movies matching "${searchTitle}". Please check the spelling or try a different movie name.`, 'bot');
             }
+            return;
+        }
+
+        let movie;
+        
+        if (searchYear) {
+            // If year was specified, find the movie with matching year
+            movie = searchData.results.find(m => {
+                const movieYear = m.release_date ? new Date(m.release_date).getFullYear().toString() : null;
+                return movieYear === searchYear;
+            });
+            
+            // If no exact year match found, use the first result
+            if (!movie) {
+                movie = searchData.results[0];
+                const movieYear = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
+                addMessage(`Note: Couldn't find "${searchTitle}" from ${searchYear}. Showing results for "${movie.title}" (${movieYear}) instead.`, 'bot');
+            }
+        } else {
+            // If multiple movies found with same title, show a message with years
+            if (searchData.results.length > 1) {
+                const movieOptions = searchData.results
+                    .slice(0, 3) // Show top 3 matches
+                    .map(m => {
+                        const year = m.release_date ? new Date(m.release_date).getFullYear() : 'N/A';
+                        return `"${m.title}" (${year})`;
+                    })
+                    .join(', ');
+                addMessage(`Found multiple movies with similar titles: ${movieOptions}. For a specific movie, include the year like: "${searchTitle} (YEAR)"`, 'bot');
+            }
+            movie = searchData.results[0];
+        }
+
+        // Get recommendations for this specific movie
+        const recommendResponse = await fetch(
+            `https://api.themoviedb.org/3/movie/${movie.id}/recommendations?api_key=${TMDB_API_KEY}&language=en-US&page=1`
+        );
+        const recommendData = await recommendResponse.json();
+
+        // Get similar movies
+        const similarResponse = await fetch(
+            `https://api.themoviedb.org/3/movie/${movie.id}/similar?api_key=${TMDB_API_KEY}&language=en-US&page=1`
+        );
+        const similarData = await similarResponse.json();
+
+        // Combine and filter recommendations and similar movies
+        const allRecommendations = [...(recommendData.results || []), ...(similarData.results || [])]
+            .filter((movie, index, self) => 
+                index === self.findIndex((m) => m.id === movie.id) && // Remove duplicates
+                movie.vote_average >= 6 && 
+                movie.vote_count >= 50
+            )
+            .sort((a, b) => b.vote_average - a.vote_average)
+            .slice(0, 10);
+
+        // Remove loading indicator
+        loadingDiv.remove();
+
+        // Display the original movie first
+        addMessage(`Here's the movie you searched for:`, 'bot');
+        chatMessages.appendChild(createMovieRecommendation(movie));
+
+        if (allRecommendations.length > 0) {
+            addMessage(`If you liked "${movie.title}", you might also enjoy these similar movies:`, 'bot');
+            
+            // Create a section for similar movies
+            const similarMoviesSection = document.createElement('div');
+            similarMoviesSection.className = 'similar-movies-section';
+            
+            // Add all recommendations to the section
+            allRecommendations.forEach(movie => {
+                similarMoviesSection.appendChild(createMovieRecommendation(movie));
+            });
+            
+            chatMessages.appendChild(similarMoviesSection);
         } else {
             // If specific movie not found, try the category-based search
             let searchUrl;
@@ -253,7 +247,28 @@ async function sendMessage() {
                     + '&with_keywords=158091'
                     + '&page=1';
             } else {
-                // Default discover for high-rated movies
+                // Try to find similar movies based on partial matches
+                const fuzzySearchResponse = await fetch(
+                    `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchTitle)}&language=en-US&page=1&include_adult=false`
+                );
+                const fuzzySearchData = await fuzzySearchResponse.json();
+
+                if (fuzzySearchData.results && fuzzySearchData.results.length > 0) {
+                    // Found similar titles
+                    const suggestions = fuzzySearchData.results
+                        .slice(0, 3)
+                        .map(m => {
+                            const year = m.release_date ? ` (${new Date(m.release_date).getFullYear()})` : '';
+                            return `"${m.title}${year}"`;
+                        })
+                        .join(', ');
+                    
+                    loadingDiv.remove();
+                    addMessage(`I couldn't find an exact match for "${searchTitle}". Did you mean one of these: ${suggestions}?`, 'bot');
+                    return;
+                }
+
+                // If no similar movies found, show general recommendations
                 searchUrl = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}`
                     + '&language=en-US'
                     + '&sort_by=vote_average.desc'
@@ -269,20 +284,24 @@ async function sendMessage() {
             loadingDiv.remove();
 
             if (discoverData.results && discoverData.results.length > 0) {
-                addMessage('Here are some highly-rated movies you might enjoy:', 'bot');
+                if (!searchTitle.includes('cricket') && !searchTitle.includes('sports')) {
+                    addMessage(`I couldn't find "${searchTitle}". Here are some popular movies you might enjoy instead:`, 'bot');
+                } else {
+                    addMessage('Here are some highly-rated movies you might enjoy:', 'bot');
+                }
                 
                 // Create a section for discovered movies
                 const discoveredMoviesSection = document.createElement('div');
                 discoveredMoviesSection.className = 'similar-movies-section';
                 
-                const recommendations = discoverData.results.slice(0, 10); // Increased from 5 to 10
+                const recommendations = discoverData.results.slice(0, 10);
                 recommendations.forEach(movie => {
                     discoveredMoviesSection.appendChild(createMovieRecommendation(movie));
                 });
                 
                 chatMessages.appendChild(discoveredMoviesSection);
             } else {
-                addMessage("I couldn't find any movies matching your request. Please try another search term!", 'bot');
+                addMessage(`Sorry, I couldn't find any movies matching "${searchTitle}". Please check the spelling or try a different movie name.`, 'bot');
             }
         }
     } catch (error) {
